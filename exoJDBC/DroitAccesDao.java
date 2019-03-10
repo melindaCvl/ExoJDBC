@@ -13,6 +13,11 @@ public class DroitAccesDao {
 	
 	public DroitAccesDao (Connection connection) {
 		this.connection = connection;
+		
+		// on désactive l'auto commit
+		try {
+			connection.setAutoCommit(false);
+		} catch (Exception e) {}
 	}
 	
 	/**
@@ -33,34 +38,16 @@ public class DroitAccesDao {
 	 * @throws DroitInconnuException
 	 */
 	public void addUtilisateur(Utilisateur u, String... droit) throws DroitInconnuException {
-		// on récupère les droits
-		ArrayList<Integer> listeDroits = retournerDroits(droit);
-
-		// on désactive l'auto commit
-		try {
-			connection.setAutoCommit(false);
-		} catch (Exception e) {}
-
 		// on créé l'utilisateur
 		String requete = "insert into Utilisateur (login, dateInscription, actif) values (?, ?, ?)";
 		
 		try (PreparedStatement pstmt = connection.prepareStatement(requete, Statement.RETURN_GENERATED_KEYS)) {
 			pstmt.setString(1, u.getLogin());
-			pstmt.setDate(2, u.getInscription());
+			pstmt.setString(2, u.getInscription() + "");
 			pstmt.setBoolean(3, u.isActif());
 			
 			// Ajout de l'utilisateur
 			pstmt.executeUpdate();
-			
-			// on vérifie que tous les droits existent tous
-			// si un droit n'existe pas, on ne valide pas la transaction et le programme s'arrête
-			int nbDroitsExistants = listeDroits.size();
-			int nbDroitsVoulus = droit.length;
-			
-			if(nbDroitsExistants != nbDroitsVoulus) {
-				connection.rollback();
-				throw new DroitInconnuException();
-			}
 
 			// on insère les droits
 			try (ResultSet resultSet = pstmt.getGeneratedKeys()) {
@@ -68,15 +55,21 @@ public class DroitAccesDao {
 					int key = resultSet.getInt(1);
 
 					//boucle for permettant d'insérer des lignes dans table_utilisateurs
-					for (int unDroit : listeDroits) {
+					for (String unDroit : droit) {
 						addDroitUtilisateur(key, unDroit);
 					}
 				}
 			}
 			
+			System.out.println("Succès de l'ajout de l'utilisateur");
 			connection.commit();
 			
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			try {
+				System.out.println("Echec de l'ajout de l'utilisateur");
+				connection.rollback();
+			} catch (Exception exc) {}
+		}
 	}
 	
 	/**
@@ -86,15 +79,9 @@ public class DroitAccesDao {
 	 */
 	private ArrayList<Integer> retournerDroits(String... droit) {
 		ArrayList<Integer> listeDroit = new ArrayList<>();
-
-		try {
-			connection.setAutoCommit(true);
-		} catch (Exception e) {
-			
-		}
 		
 		// on créé la requête paramétrée en fonction du nombre de droits dans le tableau passé en paramètre
-		String requete = "SELECT * FROM Droit ";
+		String requete = "SELECT id FROM Droit ";
 		int nbDroits = droit.length;
 		
 		for (int indDroit = 0; indDroit < nbDroits; indDroit++) {
@@ -119,6 +106,8 @@ public class DroitAccesDao {
 			}
 			ResultSet rs = pstmt.executeQuery();
 			
+			connection.commit();
+			
 			while(rs.next()) {
 				listeDroit.add(rs.getInt("id"));
 			}
@@ -136,12 +125,12 @@ public class DroitAccesDao {
 	 * @param droit
 	 * @throws DroitInconnuException
 	 */
-	private void addDroitUtilisateur(int idUtilisateur, int droit) throws DroitInconnuException {
-		String requete = "insert into Utilisateur_droit (id_utilisateur, id_droit) values (?, ?)";
+	private void addDroitUtilisateur(int idUtilisateur, String droit) throws DroitInconnuException {
+		String requete = "INSERT INTO Utilisateur_droit (id_utilisateur, id_droit) VALUES(?, (SELECT id FROM Droit WHERE libelle = ?))";
 		
-		try (PreparedStatement pstmt = connection.prepareStatement(requete, Statement.RETURN_GENERATED_KEYS)) {
+		try (PreparedStatement pstmt = connection.prepareStatement(requete)) {
 			pstmt.setInt(1, idUtilisateur);
-			pstmt.setInt(2, droit);
+			pstmt.setString(2, droit);
 			pstmt.executeUpdate();
 			
 		} catch (Exception e) {
@@ -187,7 +176,7 @@ public class DroitAccesDao {
 	public boolean isAutorise(String login, String droit) throws SQLException {
 		boolean estAutorise = false;
 		
-		String requete = "SELECT * FROM Utilisateur_Droit INNER JOIN Utilisateur ON Utilisateur_Droit.id_utilisateur = Utilisateur.id WHERE id_utilisateur = ? AND id_droit = ? AND actif = true";
+		String requete = "SELECT * FROM (Utilisateur_Droit INNER JOIN Utilisateur ON Utilisateur_Droit.id_utilisateur = Utilisateur.id) INNER JOIN Droit ON Utilisateur_Droit.id_droit = Droit.id WHERE login = ? AND libelle = ? AND actif = true";
 
 		try (java.sql.PreparedStatement pstmt = connection.prepareStatement(requete)) {
 

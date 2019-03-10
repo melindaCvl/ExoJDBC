@@ -20,7 +20,7 @@ public class TextConnexion {
 			parcourirUser(liste);
 			
 			// Détermine si un utilisateur a un droit
-			boolean autorise = dao.isAutorise("2", "1");
+			boolean autorise = dao.isAutorise("doe", "connexion");
 			
 			// Ajout d'un utilisateur avec des droits tous existants
 			Utilisateur u = new Utilisateur(5, "jeSuisUnLogin", new java.sql.Date(System.currentTimeMillis()), true);
@@ -34,7 +34,7 @@ public class TextConnexion {
 			String[] listeDroits2 = {"connexion", "ecriture", "fromage"};		// le droit "fromage n'existe pas, rien ne doit être créé
 			
 			try {
-				dao.addUtilisateur(u, listeDroits2);
+				 dao.addUtilisateur(u, listeDroits2);
 			} catch (Exception e) {}
 			
 		} catch (SQLException e) {
